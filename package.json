@@ -1,0 +1,115 @@
+{
+  "name": "pg-explorer",
+  "displayName": "PG Explorer",
+  "description": "PostgreSQL explorer with AI natural language query support",
+  "version": "1.3.0",
+  "publisher": "Krishnapawar26",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:pgExplorer.connectionsView"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "pgExplorer",
+          "title": "PG Explorer",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "pgExplorer": [
+        {
+          "id": "pgExplorer.connectionsView",
+          "name": "Connections"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "pgExplorer.addConnection",
+        "title": "Add Connection",
+        "icon": "$(add)"
+      },
+      {
+        "command": "pgExplorer.deleteConnection",
+        "title": "Delete Connection",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "pgExplorer.refreshTree",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "pgExplorer.openQueryRunner",
+        "title": "Open Query Runner",
+        "icon": "$(play)"
+      },
+      {
+        "command": "pgExplorer.openSettings",
+        "title": "Settings",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "pgExplorer.openAskAI",
+        "title": "Ask AI",
+        "icon": "$(sparkle)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "pgExplorer.addConnection",
+          "when": "view == pgExplorer.connectionsView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "pgExplorer.openAskAI",
+          "when": "view == pgExplorer.connectionsView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "pgExplorer.refreshTree",
+          "when": "view == pgExplorer.connectionsView",
+          "group": "navigation@3"
+        },
+        {
+          "command": "pgExplorer.openSettings",
+          "when": "view == pgExplorer.connectionsView",
+          "group": "navigation@4"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "pgExplorer.deleteConnection",
+          "when": "view == pgExplorer.connectionsView && viewItem == connection",
+          "group": "inline@1"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "npx vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.80.0",
+    "@types/node": "^18.0.0",
+    "@types/pg": "^8.10.0",
+    "typescript": "^5.0.0",
+    "@vscode/vsce": "^2.19.0"
+  },
+  "dependencies": {
+    "pg": "^8.11.0"
+  }
+}
