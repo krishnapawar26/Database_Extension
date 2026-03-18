@@ -1,0 +1,146 @@
+PostgreSQL Chinook Database Schema:
+
+Table: album
+  - album_id (integer)
+  - title (character varying)
+  - artist_id (integer)
+
+Table: artist
+  - artist_id (integer)
+  - name (character varying)
+
+Table: customer
+  - customer_id (integer)
+  - first_name (character varying)
+  - last_name (character varying)
+  - company (character varying)
+  - address (character varying)
+  - city (character varying)
+  - state (character varying)
+  - country (character varying)
+  - postal_code (character varying)
+  - phone (character varying)
+  - fax (character varying)
+  - email (character varying)
+  - support_rep_id (integer)
+
+Table: employee
+  - employee_id (integer)
+  - last_name (character varying)
+  - first_name (character varying)
+  - title (character varying)
+  - reports_to (integer)
+  - birth_date (timestamp without time zone)
+  - hire_date (timestamp without time zone)
+  - address (character varying)
+  - city (character varying)
+  - state (character varying)
+  - country (character varying)
+  - postal_code (character varying)
+  - phone (character varying)
+  - fax (character varying)
+  - email (character varying)
+
+Table: genre
+  - genre_id (integer)
+  - name (character varying)
+
+Table: invoice
+  - invoice_id (integer)
+  - customer_id (integer)
+  - invoice_date (timestamp without time zone)
+  - billing_address (character varying)
+  - billing_city (character varying)
+  - billing_state (character varying)
+  - billing_country (character varying)
+  - billing_postal_code (character varying)
+  - total (numeric)
+
+Table: invoice_line
+  - invoice_line_id (integer)
+  - invoice_id (integer)
+  - track_id (integer)
+  - unit_price (numeric)
+  - quantity (integer)
+
+Table: media_type
+  - media_type_id (integer)
+  - name (character varying)
+
+Table: playlist
+  - playlist_id (integer)
+  - name (character varying)
+
+Table: playlist_track
+  - playlist_id (integer)
+  - track_id (integer)
+
+Table: track
+  - track_id (integer)
+  - name (character varying)
+  - album_id (integer)
+  - media_type_id (integer)
+  - genre_id (integer)
+  - composer (character varying)
+  - milliseconds (integer)
+  - bytes (integer)
+  - unit_price (numeric)
+
+Foreign Key Relationships:
+  - album.artist_id → artist.artist_id
+  - customer.support_rep_id → employee.employee_id
+  - employee.reports_to → employee.employee_id
+  - invoice.customer_id → customer.customer_id
+  - invoice_line.invoice_id → invoice.invoice_id
+  - invoice_line.track_id → track.track_id
+  - playlist_track.playlist_id → playlist.playlist_id
+  - playlist_track.track_id → track.track_id
+  - track.album_id → album.album_id
+  - track.genre_id → genre.genre_id
+  - track.media_type_id → media_type.media_type_id
+
+Sample Data (first 2 rows per table):
+
+album: ['album_id', 'title', 'artist_id']
+  [1, 'For Those About To Rock We Salute You', 1]
+  [2, 'Balls to the Wall', 2]
+
+artist: ['artist_id', 'name']
+  [1, 'AC/DC']
+  [2, 'Accept']
+
+customer: ['customer_id', 'first_name', 'last_name', 'company', 'address', 'city', 'state', 'country', 'postal_code', 'phone', 'fax', 'email', 'support_rep_id']
+  [1, 'Luís', 'Gonçalves', 'Embraer - Empresa Brasileira de Aeronáutica S.A.', 'Av. Brigadeiro Faria Lima, 2170', 'São José dos Campos', 'SP', 'Brazil', '12227-000', '+55 (12) 3923-5555', '+55 (12) 3923-5566', 'luisg@embraer.com.br', 3]
+  [2, 'Leonie', 'Köhler', None, 'Theodor-Heuss-Straße 34', 'Stuttgart', None, 'Germany', '70174', '+49 0711 2842222', None, 'leonekohler@surfeu.de', 5]
+
+employee: ['employee_id', 'last_name', 'first_name', 'title', 'reports_to', 'birth_date', 'hire_date', 'address', 'city', 'state', 'country', 'postal_code', 'phone', 'fax', 'email']
+  [1, 'Adams', 'Andrew', 'General Manager', None, datetime.datetime(1962, 2, 18, 0, 0), datetime.datetime(2002, 8, 14, 0, 0), '11120 Jasper Ave NW', 'Edmonton', 'AB', 'Canada', 'T5K 2N1', '+1 (780) 428-9482', '+1 (780) 428-3457', 'andrew@chinookcorp.com']
+  [2, 'Edwards', 'Nancy', 'Sales Manager', 1, datetime.datetime(1958, 12, 8, 0, 0), datetime.datetime(2002, 5, 1, 0, 0), '825 8 Ave SW', 'Calgary', 'AB', 'Canada', 'T2P 2T3', '+1 (403) 262-3443', '+1 (403) 262-3322', 'nancy@chinookcorp.com']
+
+genre: ['genre_id', 'name']
+  [1, 'Rock']
+  [2, 'Jazz']
+
+invoice: ['invoice_id', 'customer_id', 'invoice_date', 'billing_address', 'billing_city', 'billing_state', 'billing_country', 'billing_postal_code', 'total']
+  [1, 2, datetime.datetime(2021, 1, 1, 0, 0), 'Theodor-Heuss-Straße 34', 'Stuttgart', None, 'Germany', '70174', Decimal('1.98')]
+  [2, 4, datetime.datetime(2021, 1, 2, 0, 0), 'Ullevålsveien 14', 'Oslo', None, 'Norway', '0171', Decimal('3.96')]
+
+invoice_line: ['invoice_line_id', 'invoice_id', 'track_id', 'unit_price', 'quantity']
+  [1, 1, 2, Decimal('0.99'), 1]
+  [2, 1, 4, Decimal('0.99'), 1]
+
+media_type: ['media_type_id', 'name']
+  [1, 'MPEG audio file']
+  [2, 'Protected AAC audio file']
+
+playlist: ['playlist_id', 'name']
+  [1, 'Music']
+  [2, 'Movies']
+
+playlist_track: ['playlist_id', 'track_id']
+  [1, 3402]
+  [1, 3389]
+
+track: ['track_id', 'name', 'album_id', 'media_type_id', 'genre_id', 'composer', 'milliseconds', 'bytes', 'unit_price']
+  [1, 'For Those About To Rock (We Salute You)', 1, 1, 1, 'Angus Young, Malcolm Young, Brian Johnson', 343719, 11170334, Decimal('0.99')]
+  [2, 'Balls to the Wall', 2, 2, 1, 'U. Dirkschneider, W. Hoffmann, H. Frank, P. Baltes, S. Kaufmann, G. Hoffmann', 342562, 5510424, Decimal('0.99')]

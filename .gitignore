@@ -13,10 +13,26 @@ out/
 # VS Code
 .vscode/
 
-# Environment files
+# Environment files — NEVER commit these (contain API keys & DB credentials)
 .env
 .env.*
 
 # OS files
 .DS_Store
 Thumbs.db
+
+# Python virtual environment
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Vanna / ChromaDB cache
+3477cdab157537bd/
+*.db
+chroma/
