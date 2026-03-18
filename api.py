@@ -314,7 +314,8 @@ RUNNER_FACTORY: dict[str, callable] = {
     "oracle":   _make_oracle_runner,
 }
 
-agent_memory = DemoAgentMemory(max_items=1000)
+# NOTE: agent_memory is intentionally created fresh inside build_agent()
+# so each request starts with a clean slate and never sees previous query history.
 
 
 class SimpleUserResolver(UserResolver):
@@ -338,11 +339,14 @@ def build_agent(db_type: str, sql_runner=None) -> Agent:
     llm = _make_llm(system_prompt)
     print(f"  [Agent] db_type={db_type}, prompt_chars={len(system_prompt)}")
 
+    # Fresh memory per request — prevents previous query answers from leaking in
+    fresh_memory = DemoAgentMemory(max_items=1000)
+
     return Agent(
         llm_service=llm,
         tool_registry=tools,
         user_resolver=SimpleUserResolver(),
-        agent_memory=agent_memory,
+        agent_memory=fresh_memory,
         system_prompt_builder=DefaultSystemPromptBuilder(base_prompt=system_prompt),
     )
 
