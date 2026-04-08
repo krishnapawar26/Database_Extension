@@ -200,39 +200,66 @@ _google_valid = _is_valid_key(_google_key)
 
 print(f"[ENV] LLM_PROVIDER='{_raw_provider}' | groq_valid={_groq_valid} | google_valid={_google_valid}")
 
+# Determine env-level provider (used as fallback when no per-request config)
+_env_provider: str
 if _raw_provider == "groq" and _groq_valid:
-    provider = "groq"
+    _env_provider = "groq"
 elif _raw_provider in ("gemini", "google") and _google_valid:
-    provider = "gemini"
+    _env_provider = "gemini"
 elif _groq_valid:
-    provider = "groq"
+    _env_provider = "groq"
     print("⚠️  Falling back to Groq (GROQ_API_KEY is valid)")
 elif _google_valid:
-    provider = "gemini"
+    _env_provider = "gemini"
     print("⚠️  Falling back to Gemini (GOOGLE_API_KEY is valid)")
 else:
-    raise ValueError(
-        "No valid API key found.\n"
-        "For Groq:   LLM_PROVIDER=groq   + GROQ_API_KEY=gsk_...\n"
-        "For Gemini: LLM_PROVIDER=gemini + GOOGLE_API_KEY=AIza..."
-    )
+    _env_provider = ""  # No env key — must come from per-request config
+    print("⚠️  No valid LLM key in .env — must be provided per-request via config")
 
-if provider == "gemini":
-    print("🧠 Using Gemini LLM")
-    from gemini_llm import GeminiLlmService
-    def _make_llm(system_prompt: str):
+
+def _make_llm(system_prompt: str, cfg=None):
+    """Create an LLM instance. cfg (ConnectionConfig) fields take priority over env vars."""
+    # Resolve API key and provider from per-request config, fall back to env
+    req_provider = (getattr(cfg, "llm_provider", None) or "").strip().lower()
+    req_groq_key = _clean_api_key(getattr(cfg, "groq_api_key", None) or "")
+    req_google_key = _clean_api_key(getattr(cfg, "google_api_key", None) or "")
+    req_groq_model = getattr(cfg, "groq_model", None) or os.getenv("GROQ_MODEL")
+    req_google_model = getattr(cfg, "google_model", None) or os.getenv("GOOGLE_MODEL")
+
+    # Determine which provider + key to use
+    groq_key = req_groq_key if _is_valid_key(req_groq_key) else _groq_key
+    google_key = req_google_key if _is_valid_key(req_google_key) else _google_key
+    groq_valid = _is_valid_key(groq_key)
+    google_valid = _is_valid_key(google_key)
+
+    if req_provider == "groq" and groq_valid:
+        provider = "groq"
+    elif req_provider in ("gemini", "google") and google_valid:
+        provider = "gemini"
+    elif _env_provider:
+        provider = _env_provider
+    elif groq_valid:
+        provider = "groq"
+    elif google_valid:
+        provider = "gemini"
+    else:
+        raise ValueError(
+            "No valid LLM API key found. "
+            "Set llm_provider + groq_api_key / google_api_key in the connection config."
+        )
+
+    if provider == "gemini":
+        from gemini_llm import GeminiLlmService
         return GeminiLlmService(
-            api_key=_google_key,
-            model=os.getenv("GOOGLE_MODEL"),
+            api_key=google_key,
+            model=req_google_model,
             system_prompt=system_prompt,
         )
-else:
-    print("⚡ Using Groq LLM")
-    from groq_llm import GroqLlmService
-    def _make_llm(system_prompt: str):
+    else:
+        from groq_llm import GroqLlmService
         return GroqLlmService(
-            api_key=_groq_key,
-            model=os.getenv("GROQ_MODEL"),
+            api_key=groq_key,
+            model=req_groq_model,
         )
 
 
@@ -240,31 +267,31 @@ else:
 # DATABASE RUNNERS
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _make_postgres_runner() -> PostgresRunner:
-    return PostgresRunner(
-        host=os.getenv("DB_HOST"),
-        port=int(os.getenv("DB_PORT", "5432")),
-        database=os.getenv("DB_NAME"),
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWORD"),
-    )
+def _make_postgres_runner(cfg=None) -> PostgresRunner:
+    """Create a Postgres runner. cfg fields override env vars."""
+    host     = (getattr(cfg, "db_host",     None) or os.getenv("DB_HOST"))
+    port     = (getattr(cfg, "db_port",     None) or int(os.getenv("DB_PORT", "5432")))
+    database = (getattr(cfg, "db_name",     None) or os.getenv("DB_NAME"))
+    user     = (getattr(cfg, "db_user",     None) or os.getenv("DB_USER"))
+    password = (getattr(cfg, "db_password", None) or os.getenv("DB_PASSWORD", ""))
+    return PostgresRunner(host=host, port=int(port), database=database, user=user, password=password)
 
 
-def _make_mysql_runner():
+def _make_mysql_runner(cfg=None):
     if not _MYSQL_AVAILABLE:
         raise RuntimeError("MySQL not installed. Run: pip install vanna[mysql]")
 
-    host     = os.getenv("MYSQL_HOST", "localhost")
-    port     = int(os.getenv("MYSQL_PORT", "3306"))
-    database = os.getenv("MYSQL_DB") or os.getenv("MYSQL_DATABASE") or os.getenv("MYSQL_SCHEMA")
-    user     = os.getenv("MYSQL_USER")
-    password = os.getenv("MYSQL_PASSWORD", "")
+    host     = (getattr(cfg, "mysql_host",     None) or os.getenv("MYSQL_HOST", "localhost"))
+    port     = int(getattr(cfg, "mysql_port",  None) or os.getenv("MYSQL_PORT", "3306"))
+    database = (getattr(cfg, "mysql_db",       None) or
+                os.getenv("MYSQL_DB") or os.getenv("MYSQL_DATABASE") or os.getenv("MYSQL_SCHEMA"))
+    user     = (getattr(cfg, "mysql_user",     None) or os.getenv("MYSQL_USER"))
+    password = (getattr(cfg, "mysql_password", None) or os.getenv("MYSQL_PASSWORD", ""))
 
     if not database:
         raise RuntimeError(
-            "MYSQL_DB is not set in your .env file.\n"
-            "Add:  MYSQL_DB=your_database_name\n"
-            "Then restart python api.py."
+            "MySQL database name is not set. "
+            "Set it in the connection config or in MYSQL_DB env var."
         )
 
     print(f"  [MySQL] connecting to {host}:{port}/{database} as {user}")
@@ -296,16 +323,15 @@ def _make_mysql_runner():
     return runner
 
 
-def _make_oracle_runner():
+def _make_oracle_runner(cfg=None):
     if not _ORACLE_AVAILABLE:
         raise RuntimeError("Oracle not installed. Run: pip install vanna[oracle]")
-    return OracleRunner(
-        host=os.getenv("ORACLE_HOST", "localhost"),
-        port=int(os.getenv("ORACLE_PORT", "1521")),
-        service_name=os.getenv("ORACLE_SERVICE"),
-        user=os.getenv("ORACLE_USER"),
-        password=os.getenv("ORACLE_PASSWORD"),
-    )
+    host     = (getattr(cfg, "oracle_host",    None) or os.getenv("ORACLE_HOST", "localhost"))
+    port     = int(getattr(cfg, "oracle_port", None) or os.getenv("ORACLE_PORT", "1521"))
+    service  = (getattr(cfg, "oracle_service", None) or os.getenv("ORACLE_SERVICE"))
+    user     = (getattr(cfg, "oracle_user",    None) or os.getenv("ORACLE_USER"))
+    password = (getattr(cfg, "oracle_password",None) or os.getenv("ORACLE_PASSWORD"))
+    return OracleRunner(host=host, port=port, service_name=service, user=user, password=password)
 
 
 RUNNER_FACTORY: dict[str, callable] = {
@@ -323,11 +349,11 @@ class SimpleUserResolver(UserResolver):
         return User(id="local-user", email="local@example.com", group_memberships=["admin"])
 
 
-def build_agent(db_type: str, sql_runner=None) -> Agent:
+def build_agent(db_type: str, sql_runner=None, cfg=None) -> Agent:
     if sql_runner is None:
         factory = RUNNER_FACTORY.get(db_type, _make_postgres_runner)
         try:
-            sql_runner = factory()
+            sql_runner = factory(cfg)
         except (ImportError, RuntimeError) as e:
             raise RuntimeError(str(e)) from e
 
@@ -336,7 +362,7 @@ def build_agent(db_type: str, sql_runner=None) -> Agent:
     tools.register_local_tool(db_tool, access_groups=["admin"])
 
     system_prompt = _build_system_prompt(db_type)
-    llm = _make_llm(system_prompt)
+    llm = _make_llm(system_prompt, cfg)
     print(f"  [Agent] db_type={db_type}, prompt_chars={len(system_prompt)}")
 
     # Fresh memory per request — prevents previous query answers from leaking in
@@ -561,9 +587,43 @@ app.add_middleware(
 )
 
 
+class ConnectionConfig(BaseModel):
+    """Per-request LLM + DB config. If provided, overrides env vars."""
+    # LLM
+    llm_provider: Optional[str] = None   # "groq" or "gemini"
+    groq_api_key: Optional[str] = None
+    groq_model: Optional[str] = None
+    google_api_key: Optional[str] = None
+    google_model: Optional[str] = None
+    # PostgreSQL
+    db_host: Optional[str] = None
+    db_port: Optional[int] = 5432
+    db_name: Optional[str] = None
+    db_user: Optional[str] = None
+    db_password: Optional[str] = None
+    # MySQL
+    mysql_host: Optional[str] = None
+    mysql_port: Optional[int] = 3306
+    mysql_db: Optional[str] = None
+    mysql_user: Optional[str] = None
+    mysql_password: Optional[str] = None
+    # Oracle
+    oracle_host: Optional[str] = None
+    oracle_port: Optional[int] = 1521
+    oracle_service: Optional[str] = None
+    oracle_user: Optional[str] = None
+    oracle_password: Optional[str] = None
+
+
 class QueryRequest(BaseModel):
     query: str
     db_type: Optional[Literal["postgres", "mysql", "oracle"]] = "postgres"
+    config: Optional[ConnectionConfig] = None
+
+
+class TestConnectionRequest(BaseModel):
+    db_type: Optional[Literal["postgres", "mysql", "oracle"]] = "postgres"
+    config: Optional[ConnectionConfig] = None
 
 
 _debug_printed = False
@@ -575,12 +635,13 @@ async def ask_database(request: QueryRequest):
     _debug_printed = False
 
     db_type = request.db_type or "postgres"
-    print(f"--- Query [{db_type.upper()}]: {request.query} ---")
+    cfg     = request.config  # May be None — falls back to env vars
+    print(f"--- Query [{db_type.upper()}]: {request.query} (config={'yes' if cfg else 'env'}) ---")
 
     try:
         runner_factory = RUNNER_FACTORY.get(db_type, _make_postgres_runner)
-        sql_runner = runner_factory()
-        agent      = build_agent(db_type, sql_runner=sql_runner)
+        sql_runner = runner_factory(cfg)
+        agent      = build_agent(db_type, sql_runner=sql_runner, cfg=cfg)
         context    = RequestContext(headers={}, query_params={})
         output     = []
 
@@ -674,6 +735,57 @@ async def ask_database(request: QueryRequest):
 @app.get("/health")
 def health():
     return {"status": "Vanna API is running locally!"}
+
+
+@app.post("/api/test-connection")
+async def test_connection(request: TestConnectionRequest):
+    """Validate DB credentials + LLM key from the form before saving a connection."""
+    db_type = request.db_type or "postgres"
+    cfg     = request.config
+    errors  = []
+
+    # ── Test DB connection ──────────────────────────────────────────────────
+    try:
+        runner_factory = RUNNER_FACTORY.get(db_type, _make_postgres_runner)
+        runner = runner_factory(cfg)
+        # Run a trivial query to confirm connectivity
+        if db_type == "postgres":
+            import psycopg2
+            host     = (getattr(cfg, "db_host",     None) or os.getenv("DB_HOST"))
+            port     = int(getattr(cfg, "db_port",  None) or os.getenv("DB_PORT", 5432))
+            database = (getattr(cfg, "db_name",     None) or os.getenv("DB_NAME"))
+            user     = (getattr(cfg, "db_user",     None) or os.getenv("DB_USER"))
+            password = (getattr(cfg, "db_password", None) or os.getenv("DB_PASSWORD", ""))
+            conn = psycopg2.connect(host=host, port=port, dbname=database,
+                                    user=user, password=password, connect_timeout=5)
+            conn.close()
+    except Exception as e:
+        errors.append(f"Database: {e}")
+
+    # ── Test LLM key ────────────────────────────────────────────────────────
+    try:
+        req_provider = (getattr(cfg, "llm_provider", None) or "").strip().lower()
+        req_groq_key = _clean_api_key(getattr(cfg, "groq_api_key", None) or "")
+        req_google_key = _clean_api_key(getattr(cfg, "google_api_key", None) or "")
+
+        groq_key   = req_groq_key   if _is_valid_key(req_groq_key)   else _groq_key
+        google_key = req_google_key if _is_valid_key(req_google_key) else _google_key
+
+        if req_provider == "groq" or (not req_provider and _is_valid_key(groq_key)):
+            if not _is_valid_key(groq_key):
+                errors.append("LLM: Groq API key is missing or invalid")
+        elif req_provider in ("gemini", "google") or (not req_provider and _is_valid_key(google_key)):
+            if not _is_valid_key(google_key):
+                errors.append("LLM: Google/Gemini API key is missing or invalid")
+        else:
+            errors.append("LLM: No valid API key provided (set groq_api_key or google_api_key)")
+    except Exception as e:
+        errors.append(f"LLM key check: {e}")
+
+    if errors:
+        raise HTTPException(status_code=400, detail=" | ".join(errors))
+
+    return {"status": "ok", "message": f"Connected to {db_type} successfully"}
 
 
 if __name__ == "__main__":
